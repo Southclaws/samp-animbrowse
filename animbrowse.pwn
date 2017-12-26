@@ -23,43 +23,41 @@
 
 
 #include <a_samp>
+#include <YSI\y_utils>
 #include <zcmd>
 
 
-#define DIALOG_INDEX            (10000)                 // Default dialog index to start dialog IDs from
-#define ANIM_SAVE_FILE          "SavedAnimations.txt"   // File to save data in
-#define MOUSE_HOVER_COLOUR      0xFFFF00FF              // Yellow
+#define DIALOG_INDEX			(10000)					// Default dialog index to start dialog IDs from
+#define ANIM_SAVE_FILE			"SavedAnimations.txt"	// File to save data in
+#define MOUSE_HOVER_COLOUR		0xFFFF00FF				// Yellow
 
-#define MAX_ANIMS               1812                    // Total amount of animations (No brackets, because it's embedded in strings)
-#define MAX_LIBRARY             (132)                   // Total amount of libraries
-#define MAX_LIBANIMS            (294)                   // Largest library
-#define MAX_LIB_NAME            (32)
-#define MAX_ANIM_NAME           (32)                    // Same as LIBNAME but just for completion!
-#define MAX_SEARCH_RESULTS      (20)                    // The max amount of search results that can be shown
-#define MAX_SEARCH_RESULT_LEN   (MAX_SEARCH_RESULTS * (MAX_LIB_NAME + 1 + MAX_ANIM_NAME))
+#define MAX_ANIMS				1812					// Total amount of animations (No brackets, because it's embedded in strings)
+#define MAX_LIBRARY				(132)					// Total amount of libraries
+#define MAX_LIBANIMS			(294)					// Largest library
+#define MAX_LIB_NAME			(32)
+#define MAX_ANIM_NAME			(32)					// Same as LIBNAME but just for completion!
+#define MAX_SEARCH_RESULTS		(20)					// The max amount of search results that can be shown
+#define MAX_SEARCH_RESULT_LEN	(MAX_SEARCH_RESULTS * (MAX_LIB_NAME + 1 + MAX_ANIM_NAME))
+#define PreloadAnimLib(%1,%2)	ApplyAnimation(%1,%2,"null",0.0,0,0,0,0,0)
 
-#define BROWSE_MODE_NONE        (0)                     // Player isn't browsing
-#define BROWSE_MODE_BROWSING    (2)                     // Player is browsing
-#define BROWSE_MODE_CAMERA      (3)                     // Player is moving the camera in browse mode
-
-#define PreloadAnimLib(%1,%2)   ApplyAnimation(%1,%2,"null",0.0,0,0,0,0,0)
-#define Msg                     SendClientMessage
-
-
-enum
-{
-	D_ANIM_LIBRARIES = DIALOG_INDEX,                    // The list of animation libraries
-	D_ANIM_LIST,                                        // The list of animations in a library
-	D_ANIM_SEARCH,                                      // Search query dialog
-	D_ANIM_SEARCH_RESULTS,                              // Search results list
-	D_ANIM_SETTINGS,                                    // Animation parameter setup
-	D_ANIM_SPEED,                                       // Animation speed parameter input
-	D_ANIM_TIME,                                        // Animation time parameter input
-	D_ANIM_IDX                                          // Animation index input
+enum {
+	BROWSE_MODE_NONE,		// Player isn't browsing
+	BROWSE_MODE_BROWSING,	// Player is browsing
+	BROWSE_MODE_CAMERA,		// Player is moving the camera in browse mode
 }
-// anm = 3 letter prefix for animation related vars.
-enum E_ANIM_SETTINGS
-{
+
+enum {
+	D_ANIM_LIBRARIES = DIALOG_INDEX,	// The list of animation libraries
+	D_ANIM_LIST,						// The list of animations in a library
+	D_ANIM_SEARCH,						// Search query dialog
+	D_ANIM_SEARCH_RESULTS,				// Search results list
+	D_ANIM_SETTINGS,					// Animation parameter setup
+	D_ANIM_SPEED,						// Animation speed parameter input
+	D_ANIM_TIME,						// Animation time parameter input
+	D_ANIM_IDX							// Animation index input
+}
+
+enum E_ANIM_SETTINGS {
 	Float:anm_Speed,
 	anm_Loop,
 	anm_LockX,
@@ -95,23 +93,20 @@ new
 	PlayerText:guiExitBrowser;
 
 
-public OnFilterScriptInit()
-{
+public OnScriptInit() {
 	new
 		lib[32],                // The library name.
 		anim[32],               // The animation name.
 		tmplib[32]  = "NULL",   // The current library name to be compared.
 		curlib      = -1;       // Current library the code writes to.
 
-	for(new i = 1;i<MAX_ANIMS;i++) // Loop through all animation IDs.
-	{
+	for(new i = 1; i < MAX_ANIMS; i++) {
 		GetAnimationName(i, lib, 32, anim, 32);
 		
 		// If the animation library just retrieved does not match the current
 		// library, the following animations are in a new library so advance
 		// the current library variable.
-		if(strcmp(lib, tmplib))
-		{
+		if(strcmp(lib, tmplib)) {
 			curlib++;
 			strcat(gLibList, lib);
 			strcat(gLibList, "\n");
@@ -125,8 +120,7 @@ public OnFilterScriptInit()
 		gAnimTotal[ curlib ]++; // Increase the total amount of animations in the current library.
 	}
 	
-	for(new i;i<MAX_PLAYERS;i++)
-	{
+	for(new i; i < MAX_PLAYERS; i++) {
 		// Default animations to avoid crashes if a user uses
 		// /animparams before /animations.
 		gCurrentLib[i] = "RUNNINGMAN";
@@ -140,78 +134,75 @@ public OnFilterScriptInit()
 	}
 }
 
-public OnFilterScriptExit()
-{
-	for(new i;i<MAX_PLAYERS;i++)
-	{
+public OnScriptExit() {
+	for(new i; i < MAX_PLAYERS; i++) {
 		UnloadPlayerTextDraws(i);
 	}
-}
 
-
-CMD:animhelp(playerid, params[])
-{
-	Msg(playerid, 0x00AAFFFF, " - Southclaws Animation Browser Help");
-	Msg(playerid, -1, " | - /animlibs {FFFF00}Open the library list.");
-	Msg(playerid, -1, " | - /animsearch {FFFF00}Open the search dialog to find animations.");
-	Msg(playerid, -1, " | - /animparams {FFFF00}Set parameters for the current animation.");
-	Msg(playerid, -1, " | - /animsave <comment> {FFFF00}Save the animation to '"#ANIM_SAVE_FILE"' with a comment.");
-	Msg(playerid, -1, " | - /animplay {FFFF00}Play the current animation if stopped.");
-	Msg(playerid, -1, " | - /animstop {FFFF00}Stop the current animation.");
 	return 1;
 }
-CMD:animbrowse(playerid, params[])
-{
-	if(gBrowseMode[playerid] == BROWSE_MODE_NONE)
-	{
+
+
+CMD:animhelp(playerid, params[]) {
+	SendClientMessage(playerid, 0x00AAFFFF, " - Southclaws Animation Browser Help");
+	SendClientMessage(playerid, -1, " | - /animlibs {FFFF00}Open the library list.");
+	SendClientMessage(playerid, -1, " | - /animsearch {FFFF00}Open the search dialog to find animations.");
+	SendClientMessage(playerid, -1, " | - /animparams {FFFF00}Set parameters for the current animation.");
+	SendClientMessage(playerid, -1, " | - /animsave <comment> {FFFF00}Save the animation to '"#ANIM_SAVE_FILE"' with a comment.");
+	SendClientMessage(playerid, -1, " | - /animplay {FFFF00}Play the current animation if stopped.");
+	SendClientMessage(playerid, -1, " | - /animstop {FFFF00}Stop the current animation.");
+	return 1;
+}
+
+CMD:animbrowse(playerid, params[]) {
+	if(gBrowseMode[playerid] == BROWSE_MODE_NONE) {
 		EnterAnimationBrowser(playerid);
-		Msg(playerid, -1, "If you accidentally exit mouse mode with ESC, use ~k~~VEHICLE_ENTER_EXIT~ to show the mouse again.");
+		SendClientMessage(playerid, -1, "If you accidentally exit mouse mode with ESC, use ~k~~VEHICLE_ENTER_EXIT~ to show the mouse again.");
+	} else {
+		ExitAnimationBrowser(playerid);
 	}
-	else ExitAnimationBrowser(playerid);
 	return 1;
 }
-CMD:animplay(playerid, params[])
-{
+
+CMD:animplay(playerid, params[]) {
 	PlayCurrentAnimation(playerid);
 	return 1;
 }
-CMD:animstop(playerid, params[])
-{
+
+CMD:animstop(playerid, params[]) {
 	ClearAnimations(playerid);
 	return 1;
 }
-CMD:animlibs(playerid, params[])
-{
+
+CMD:animlibs(playerid, params[]) {
 	PreloadPlayerAnims(playerid);
 	ShowPlayerDialog(playerid, D_ANIM_LIBRARIES, DIALOG_STYLE_LIST, "Choose an animation library", gLibList, "Open...", "Cancel");
 	return 1;
 }
-CMD:animsearch(playerid, params[])
-{
+
+CMD:animsearch(playerid, params[]) {
 	ShowPlayerDialog(playerid, D_ANIM_SEARCH, DIALOG_STYLE_INPUT, "Animation search", "Type a keyword", "Open...", "Cancel");
 	return 1;
 }
-CMD:animparams(playerid, params[])
-{
+
+CMD:animparams(playerid, params[]) {
 	FormatAnimSettingsMenu(playerid);
 	return 1;
 }
-CMD:animsave(playerid, params[])
-{
-	if(0 < strlen(params) < 32)
-	{
+
+CMD:animsave(playerid, params[]) {
+	if(0 < strlen(params) < 128) {
 		SaveCurrentAnimation(playerid, params);
-		Msg(playerid, -1, "Animation data saved!");
+		SendClientMessage(playerid, -1, "Animation data saved!");
+	} else {
+		SendClientMessage(playerid, -1, "Usage: /saveanimation [comment limit: 128]");
 	}
-	else SendClientMessage(playerid, -1, "Usage: /saveanimation [comment between 1 and 32 chars]");
 	return 1;
 }
 
 
-public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
-{
-	if(dialogid == D_ANIM_LIBRARIES && response)
-	{
+public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[]) {
+	if(dialogid == D_ANIM_LIBRARIES && response) {
 		// Blank the string because strcat is used.
 		gCurrentLib[playerid][0] = EOS;
 		// Fortunately, inputtext will return the text of the line,
@@ -221,22 +212,18 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 		ShowPlayerDialog(playerid, D_ANIM_LIST, DIALOG_STYLE_LIST, "Choose an animation", gAnimList[listitem], "Play", "Back");
 		// Preload the animations for that library
 		PreloadAnimLib(playerid, inputtext);
-	}
-	if(dialogid == D_ANIM_LIST)
-	{
-		if(response)
-		{
+	} else if(dialogid == D_ANIM_LIST) {
+		if(response) {
 			// Blank the string because strcat is used
 			gCurrentAnim[playerid][0] = EOS;
 			// Save the animation name to the variable (For saving)
 			strcat(gCurrentAnim[playerid], inputtext);
 
 			PlayCurrentAnimation(playerid);
+		} else {
+			ShowPlayerDialog(playerid, D_ANIM_LIBRARIES, DIALOG_STYLE_LIST, "Choose an animation library", gLibList, "Open...", "Cancel");
 		}
-		else ShowPlayerDialog(playerid, D_ANIM_LIBRARIES, DIALOG_STYLE_LIST, "Choose an animation library", gLibList, "Open...", "Cancel");
-	}
-	if(dialogid == D_ANIM_SEARCH && response)
-	{
+	} else if(dialogid == D_ANIM_SEARCH && response) {
 		new
 			result,
 			output[MAX_SEARCH_RESULTS * MAX_ANIM_NAME],
@@ -244,16 +231,17 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 
 		result = AnimSearch(inputtext, output);
 		
-		if(result)
-		{
+		if(result) {
 			format(title, 48, "Results for: \"%s\"", inputtext);
 			ShowPlayerDialog(playerid, D_ANIM_SEARCH_RESULTS, DIALOG_STYLE_LIST, title, output, "Play", "Back");
+		} else {
+			ShowPlayerDialog(playerid, D_ANIM_SEARCH, DIALOG_STYLE_INPUT, "Animation search", "Type a keyword\n\n{FF0000}Query not found, please try again.", "Open...", "Cancel");
 		}
-		else ShowPlayerDialog(playerid, D_ANIM_SEARCH, DIALOG_STYLE_INPUT, "Animation search", "Type a keyword\n\n{FF0000}Query not found, please try again.", "Open...", "Cancel");
-	}
-	if(dialogid == D_ANIM_SEARCH_RESULTS)
-	{
-		if(!response)return ShowPlayerDialog(playerid, D_ANIM_SEARCH, DIALOG_STYLE_INPUT, "Animation search", "Type a keyword", "Open...", "Cancel");
+	} else if(dialogid == D_ANIM_SEARCH_RESULTS) {
+		if(!response) {
+			ShowPlayerDialog(playerid, D_ANIM_SEARCH, DIALOG_STYLE_INPUT, "Animation search", "Type a keyword", "Open...", "Cancel");
+			return 1;
+		}
 
 		new delim = strfind(inputtext, "~");
 
@@ -261,35 +249,27 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 		strmid(gCurrentAnim[playerid], inputtext, delim+1, strlen(inputtext));
 
 		PlayCurrentAnimation(playerid);
-	}
-	if(dialogid == D_ANIM_SETTINGS && response)
-	{
-		if(listitem == 0)ShowPlayerDialog(playerid, D_ANIM_SPEED, DIALOG_STYLE_INPUT, "Animation Speed", "Change the speed of the animation below:", "Accept", "Back");
-		else if(listitem == 5)ShowPlayerDialog(playerid, D_ANIM_TIME, DIALOG_STYLE_INPUT, "Animation Time", "Change the time of the animation below:", "Accept", "Back");
-		else
-		{
+	} else if(dialogid == D_ANIM_SETTINGS && response) {
+		if(listitem == 0) {
+			ShowPlayerDialog(playerid, D_ANIM_SPEED, DIALOG_STYLE_INPUT, "Animation Speed", "Change the speed of the animation below:", "Accept", "Back");
+		} else if(listitem == 5) {
+			ShowPlayerDialog(playerid, D_ANIM_TIME, DIALOG_STYLE_INPUT, "Animation Time", "Change the time of the animation below:", "Accept", "Back");
+		} else {
 			gAnimSettings[playerid][E_ANIM_SETTINGS:listitem] = !gAnimSettings[playerid][E_ANIM_SETTINGS:listitem];
 			PlayCurrentAnimation(playerid);
 			FormatAnimSettingsMenu(playerid);
 		}
-	}
-	if(dialogid == D_ANIM_SPEED && response)
-	{
+	} else if(dialogid == D_ANIM_SPEED && response) {
 		gAnimSettings[playerid][anm_Speed] = floatstr(inputtext);
 		PlayCurrentAnimation(playerid);
 		FormatAnimSettingsMenu(playerid);
-	}
-	if(dialogid == D_ANIM_TIME && response)
-	{
+	} else if(dialogid == D_ANIM_TIME && response) {
 		gAnimSettings[playerid][anm_Time] = strval(inputtext);
 		PlayCurrentAnimation(playerid);
 		FormatAnimSettingsMenu(playerid);
-	}
-	if(dialogid == D_ANIM_IDX && response)
-	{
+	} if(dialogid == D_ANIM_IDX && response) {
 		new idx = strval(inputtext);
-		if(0 < idx < MAX_ANIMS)
-		{
+		if(0 < idx < MAX_ANIMS) {
 			GetAnimationName(idx,
 				gCurrentLib[playerid], MAX_LIB_NAME,
 				gCurrentAnim[playerid], MAX_ANIM_NAME);
@@ -298,17 +278,19 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 			UpdateBrowserControls(playerid);
 			PlayCurrentAnimation(playerid);
 		}
-		else ShowPlayerDialog(playerid, D_ANIM_IDX, DIALOG_STYLE_INPUT, "Anim Index", "Enter an animation index number (idx)\nbetween 0 and "#MAX_ANIMS":", "Enter", "Cancel");
+		else {
+			ShowPlayerDialog(playerid, D_ANIM_IDX, DIALOG_STYLE_INPUT, "Anim Index", "Enter an animation index number (idx)\nbetween 0 and "#MAX_ANIMS":", "Enter", "Cancel");
+		}
 	}
 	return 1;
 }
 
-public OnPlayerClickPlayerTextDraw(playerid, PlayerText:playertextid)
-{
-	if(playertextid == guiArrowL)
-	{
+public OnPlayerClickPlayerTextDraw(playerid, PlayerText:playertextid) {
+	if(playertextid == guiArrowL) {
 		gCurrentIdx[playerid]--;
-		if(gCurrentIdx[playerid] <= 0)gCurrentIdx[playerid] = MAX_ANIMS-1;
+		if(gCurrentIdx[playerid] <= 0) {
+			gCurrentIdx[playerid] = MAX_ANIMS-1;
+		}
 
 		GetAnimationName(gCurrentIdx[playerid],
 			gCurrentLib[playerid], MAX_LIB_NAME,
@@ -316,9 +298,7 @@ public OnPlayerClickPlayerTextDraw(playerid, PlayerText:playertextid)
 
 		PlayCurrentAnimation(playerid);
 		UpdateBrowserControls(playerid);
-	}
-	if(playertextid == guiArrowR)
-	{
+	} else if(playertextid == guiArrowR) {
 		gCurrentIdx[playerid]++;
 		if(gCurrentIdx[playerid] == MAX_ANIMS)gCurrentIdx[playerid] = 1;
 
@@ -328,37 +308,28 @@ public OnPlayerClickPlayerTextDraw(playerid, PlayerText:playertextid)
 
 		PlayCurrentAnimation(playerid);
 		UpdateBrowserControls(playerid);
-	}
-	if(playertextid == guiAnimIdx)
-	{
+	} else if(playertextid == guiAnimIdx) {
 		ShowPlayerDialog(playerid, D_ANIM_IDX, DIALOG_STYLE_INPUT, "Anim Index", "Enter an animation index number (idx)\nbetween 0 and "#MAX_ANIMS":", "Enter", "Cancel");
-	}
-	if(playertextid == guiCamera)
-	{
+	} else if(playertextid == guiCamera) {
 		gBrowseMode[playerid] = BROWSE_MODE_CAMERA;
 		PlayerTextDrawSetString(playerid, guiCamera, "~k~~VEHICLE_ENTER_EXIT~ for mouse mode");
 		CancelSelectTextDraw(playerid);
 		UpdateBrowserControls(playerid);
 		SetCameraBehindPlayer(playerid);
-	}
-	if(playertextid == guiExitBrowser)
-	{
+	} else if(playertextid == guiExitBrowser) {
 		ExitAnimationBrowser(playerid);
 	}
 }
 
-public OnPlayerKeyStateChange(playerid, newkeys, oldkeys)
-{
-	if(newkeys & 16 && gBrowseMode[playerid] != BROWSE_MODE_NONE)
-	{
+public OnPlayerKeyStateChange(playerid, newkeys, oldkeys) {
+	if(newkeys & 16 && gBrowseMode[playerid] != BROWSE_MODE_NONE) {
 		SelectTextDraw(playerid, MOUSE_HOVER_COLOUR);
 		gBrowseMode[playerid] = BROWSE_MODE_BROWSING;
 		PlayerTextDrawSetString(playerid, guiCamera, "Click for camera mode");
 	}
 }
 
-EnterAnimationBrowser(playerid)
-{
+EnterAnimationBrowser(playerid) {
 	new
 		Float:x,
 		Float:y,
@@ -374,8 +345,9 @@ EnterAnimationBrowser(playerid)
 
 	SetPlayerCameraLookAt(playerid, x, y, z, CAMERA_MOVE);
 	
-	if(!(0 < gCurrentIdx[playerid] < MAX_ANIMS))
+	if(!(0 < gCurrentIdx[playerid] < MAX_ANIMS)) {
 		gCurrentIdx[playerid] = 1811;
+	}
 
 	LoadPlayerTextDraws(playerid);
 	ShowBrowserControls(playerid);
@@ -385,8 +357,8 @@ EnterAnimationBrowser(playerid)
 
 	gBrowseMode[playerid] = BROWSE_MODE_BROWSING;
 }
-ExitAnimationBrowser(playerid)
-{
+
+ExitAnimationBrowser(playerid) {
 	SetCameraBehindPlayer(playerid);
 	HideBrowserControls(playerid);
 	UnloadPlayerTextDraws(playerid);
@@ -396,8 +368,7 @@ ExitAnimationBrowser(playerid)
 	gBrowseMode[playerid] = BROWSE_MODE_NONE;
 }
 
-UpdateBrowserControls(playerid)
-{
+UpdateBrowserControls(playerid) {
 	new tmp[32];
 
 	valstr(tmp, gCurrentIdx[playerid]);
@@ -409,9 +380,7 @@ UpdateBrowserControls(playerid)
 	ShowBrowserControls(playerid);
 }
 
-
-PlayCurrentAnimation(playerid)
-{
+PlayCurrentAnimation(playerid) {
 	ClearAnimations(playerid);
 	ApplyAnimation(playerid,
 		gCurrentLib[playerid],
@@ -425,8 +394,7 @@ PlayCurrentAnimation(playerid)
 		1);
 }
 
-FormatAnimSettingsMenu(playerid)
-{
+FormatAnimSettingsMenu(playerid) {
 	new
 		list[128];
 
@@ -447,14 +415,16 @@ FormatAnimSettingsMenu(playerid)
 	ShowPlayerDialog(playerid, D_ANIM_SETTINGS, DIALOG_STYLE_LIST, "Animation Settings", list, "Change", "Exit");
 }
 
-SaveCurrentAnimation(playerid, comment[])
-{
+SaveCurrentAnimation(playerid, comment[]) {
 	new
 		File:file,
-		line[156]; // Based on comment max len = 32
+		line[512];
 
-	if(!fexist(ANIM_SAVE_FILE))file = fopen(ANIM_SAVE_FILE, io_write);
-	else file = fopen(ANIM_SAVE_FILE, io_append);
+	if(!fexist(ANIM_SAVE_FILE)) {
+		file = fopen(ANIM_SAVE_FILE, io_write);
+	} else {
+		file = fopen(ANIM_SAVE_FILE, io_append);
+	}
 
 	format(line, 156, "ApplyAnimation(playerid, \"%s\", \"%s\", %.1f, %d, %d, %d, %d, %d); // %s\r\n",
 		gCurrentLib[playerid],
@@ -471,8 +441,7 @@ SaveCurrentAnimation(playerid, comment[])
 	fclose(file);
 }
 
-AnimSearch(query[], output[])
-{
+AnimSearch(query[], output[]) {
 	new
 		j,
 		animlen,
@@ -480,19 +449,18 @@ AnimSearch(query[], output[])
 		tmp[MAX_ANIM_NAME],
 		items;
 
-	for(new i; i < MAX_LIBRARY && items < MAX_SEARCH_RESULTS; i++)
-	{
-		while(j < strlen(gAnimList[i]))
-		{
-			if(gAnimList[i][j] == '\n')
-			{
+	for(new i; i < MAX_LIBRARY && items < MAX_SEARCH_RESULTS; i++) {
+		while(j < strlen(gAnimList[i])) {
+			if(gAnimList[i][j] == '\n') {
 				animlen = strfind(gAnimList[i], "\n", false, j+1) - j;
 				findpos = strfind(gAnimList[i], query, true, j+1);
 
-				if(findpos != -1 && findpos - j < animlen)
-				{
-					if(animlen == -1)strmid(tmp, gAnimList[i], j+1, strlen(gAnimList[i]), MAX_ANIM_NAME);
-					else strmid(tmp, gAnimList[i], j+1, j+animlen, MAX_ANIM_NAME);
+				if(findpos != -1 && findpos - j < animlen) {
+					if(animlen == -1) {
+						strmid(tmp, gAnimList[i], j+1, strlen(gAnimList[i]), MAX_ANIM_NAME);
+					} else {
+						strmid(tmp, gAnimList[i], j+1, j+animlen, MAX_ANIM_NAME);
+					}
 
 					strcat(output, gLibIndex[i], MAX_SEARCH_RESULTS * MAX_ANIM_NAME);
 					strcat(output, "~", MAX_SEARCH_RESULTS * MAX_ANIM_NAME);
@@ -508,9 +476,7 @@ AnimSearch(query[], output[])
 	return items;
 }
 
-
-PreloadPlayerAnims(playerid)
-{
+PreloadPlayerAnims(playerid) {
 	PreloadAnimLib(playerid,"BOMBER");
 	PreloadAnimLib(playerid,"RAPPING");
 	PreloadAnimLib(playerid,"SHOP");
@@ -528,8 +494,7 @@ PreloadPlayerAnims(playerid)
 	PreloadAnimLib(playerid,"PED");
 }
 
-ShowBrowserControls(playerid)
-{
+ShowBrowserControls(playerid) {
 	PlayerTextDrawShow(playerid, guiBackground);
 	PlayerTextDrawShow(playerid, guiArrowL);
 	PlayerTextDrawShow(playerid, guiArrowR);
@@ -539,8 +504,8 @@ ShowBrowserControls(playerid)
 	PlayerTextDrawShow(playerid, guiCamera);
 	PlayerTextDrawShow(playerid, guiExitBrowser);
 }
-HideBrowserControls(playerid)
-{
+
+HideBrowserControls(playerid) {
 	PlayerTextDrawHide(playerid, guiBackground);
 	PlayerTextDrawHide(playerid, guiArrowL);
 	PlayerTextDrawHide(playerid, guiArrowR);
@@ -551,8 +516,7 @@ HideBrowserControls(playerid)
 	PlayerTextDrawHide(playerid, guiExitBrowser);
 }
 
-LoadPlayerTextDraws(playerid)
-{
+LoadPlayerTextDraws(playerid) {
 	guiBackground                   =CreatePlayerTextDraw(playerid, 320.0, 336.0, "~n~");
 	PlayerTextDrawAlignment         (playerid, guiBackground, 2);
 	PlayerTextDrawBackgroundColor   (playerid, guiBackground, 255);
@@ -647,8 +611,7 @@ LoadPlayerTextDraws(playerid)
 	PlayerTextDrawSetSelectable     (playerid, guiExitBrowser, 1);
 }
 
-UnloadPlayerTextDraws(playerid)
-{
+UnloadPlayerTextDraws(playerid) {
 	PlayerTextDrawDestroy(playerid, guiBackground);
 	PlayerTextDrawDestroy(playerid, guiArrowL);
 	PlayerTextDrawDestroy(playerid, guiArrowR);
@@ -659,43 +622,39 @@ UnloadPlayerTextDraws(playerid)
 	PlayerTextDrawDestroy(playerid, guiExitBrowser);
 }
 
-
-CMD:deltd(playerid, params[])
-{
-	for(new i;i<2048;i++)PlayerTextDrawHide(playerid, PlayerText:i);
+CMD:deletealltextdraws(playerid, params[]) {
+	for(new i; i < 2048; i++) {
+		PlayerTextDrawHide(playerid, PlayerText:i);
+	}
 	return 1;
 }
 
+/*
+The code I used to get the max values
 
+new
+	lib[32],
+	anim[32],
+	tmplib[32] = "NULL",
+	libtotal,
+	animtotal,
+	largest;
 
-#endinput
-
-// The code I used to get the max values
-
-public OnFilterScriptInit()
+for(new i;i<MAX_ANIMS;i++)
 {
-	new
-		lib[32],
-		anim[32],
-		tmplib[32] = "NULL",
-		libtotal,
-		animtotal,
-		largest;
-
-	for(new i;i<MAX_ANIMS;i++)
+	GetAnimationName(i, lib, 32, anim, 32);
+	animtotal++;
+	if(strcmp(lib, tmplib))
 	{
-		GetAnimationName(i, lib, 32, anim, 32);
-		animtotal++;
-		if(strcmp(lib, tmplib))
-		{
-			printf("Found library: '%s' anims: %d", lib, animtotal);
-			libtotal++;
+		printf("Found library: '%s' anims: %d", lib, animtotal);
+		libtotal++;
 
-			if(animtotal > largest) largest = animtotal;
-			animtotal = 0;
+		if(animtotal > largest) largest = animtotal;
+		animtotal = 0;
 
-			tmplib = lib;
-		}
+		tmplib = lib;
 	}
-	printf("Total Libraries: %d Largest Libaray: %d", libtotal, largest);
 }
+printf("Total Libraries: %d Largest Libaray: %d", libtotal, largest);
+
+*/

@@ -1,0 +1,12 @@
+{
+    "user": "Southclaws",
+    "repo": "samp-animbrowse",
+    "entry": "animbrowse.pwn",
+    "output": "animbrowse.amx",
+    "dependencies": [
+        "Southclaws/samp-stdlib",
+        "Zeex/amx_assembly",
+        "Misiur/YSI-Includes",
+        "Southclaws/zcmd"
+    ]
+}
